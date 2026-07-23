@@ -1,0 +1,18 @@
+# Gradle caches and build outputs
+.gradle/
+**/build/
+
+# Build and diagnostic logs
+*.log
+
+# IDE metadata
+.idea/
+.vscode/
+*.iml
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Local scratch issue tracker
+.scratch/

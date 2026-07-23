@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第二课：本地 nativeCompile 与 nativeTest</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="kicker">Lesson 0002 · 实测约 15 分钟讲解 + 13 分钟编译</p>
+  <h1>本地 nativeCompile 与 nativeTest</h1>
+  <p class="lead">本课的胜利条件：不用 Docker，直接生成、运行并测试一个 Spring Boot 4.1 原生可执行文件。</p>
+
+  <div class="callout warning">
+    <strong>本课已在当前项目实测通过：</strong>应用原生编译耗时 6 分 49 秒，启动耗时 0.142 秒；原生测试构建耗时 5 分 58 秒，2/2 测试通过。
+  </div>
+
+  <h2>先分清两种 AOT</h2>
+  <p>Spring Boot Native 里有两个层次的 Ahead-of-Time processing。它们名字相同，但解决的问题不同。</p>
+
+  <table>
+    <thead>
+      <tr><th>层次</th><th>负责什么</th><th>主要任务</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Spring AOT</td>
+        <td>提前分析 Bean、自动配置、代理、反射和资源，把 Spring 的动态行为转换为生成代码与 hints。</td>
+        <td><code>processAot</code>、<code>aotClasses</code></td>
+      </tr>
+      <tr>
+        <td>GraalVM AOT</td>
+        <td>对字节码、Spring AOT 生成物和 reachability metadata 做静态分析，编译成目标平台机器码。</td>
+        <td><code>nativeCompile</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <pre><code>Java 源码
+   ↓ javac
+Java 字节码
+   ↓
+Spring AOT
+   ├── Bean 注册代码
+   ├── Proxy 信息或代码
+   ├── Reflection hints
+   └── Resource metadata
+   ↓
+GraalVM Native Image AOT
+   ↓
+Linux 原生可执行文件</code></pre>
+
+  <p>应用 <code>org.graalvm.buildtools.native</code> 插件后，Spring Boot 会自动启用 Spring AOT。执行 <code>nativeCompile</code> 时不需要手工先跑 <code>processAot</code>。</p>
+
+  <div class="exercise"
+       data-quiz
+       data-correct-feedback="正确：Spring AOT 先把 Spring 的动态模型转换为生成代码和 hints，GraalVM 再进行原生编译。"
+       data-incorrect-feedback="再看一次流水线：GraalVM 本身不知道 Spring Bean 和自动配置的语义。">
+    <strong>检查题：</strong>谁负责提前处理 Spring Bean、自动配置和代理？
+    <div>
+      <button type="button" data-correct="true">Spring AOT</button>
+      <button type="button" data-correct="false">GraalVM JIT</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>AOT 也能运行在 JVM 上</h2>
+  <p>Spring AOT 并不只服务于 Native Image。下面的程序仍由 JRE 运行，但强制使用 AOT 生成的 Spring 初始化代码：</p>
+
+  <pre><code>./gradlew bootJar
+java -Dspring.aot.enabled=true \
+  -jar build/libs/native-demo-0.0.1-SNAPSHOT.jar</code></pre>
+
+  <p>它适合快速区分两类问题：</p>
+  <ul>
+    <li>如果 JVM + Spring AOT 已经失败，问题多半在 Bean 图、条件配置或 Spring AOT。</li>
+    <li>如果 JVM + Spring AOT 正常，而 Native 失败，再检查 reflection、resources、JNI、动态代理或平台依赖。</li>
+  </ul>
+
+  <h2>第一步：建立 JVM 测试基线</h2>
+  <pre><code>./gradlew test</code></pre>
+  <p>本课 JVM 基线为 <code>BUILD SUCCESSFUL</code>。这是必要的诊断边界：普通测试失败时，不要先怀疑 Native Image。</p>
+
+  <h2>第二步：构建应用原生程序</h2>
+  <pre><code>./gradlew nativeCompile</code></pre>
+
+  <p>当前项目的任务链：</p>
+  <pre><code>processAot
+compileAotJava
+processAotResources
+aotClasses
+generateResourcesConfigFile
+nativeCompile</code></pre>
+
+  <p>本次构建环境：</p>
+  <table>
+    <tbody>
+      <tr><td>Java</td><td>GraalVM CE 25.0.2</td></tr>
+      <tr><td>目标指令集</td><td><code>x86-64-v3</code></td></tr>
+      <tr><td>C 编译器</td><td>GCC 13.3.0</td></tr>
+      <tr><td>GC</td><td>Serial GC</td></tr>
+      <tr><td>构建线程</td><td>16</td></tr>
+      <tr><td>峰值 RSS</td><td>5.15 GB</td></tr>
+    </tbody>
+  </table>
+
+  <h2>八个 Native Image 阶段</h2>
+  <ol>
+    <li>Initializing</li>
+    <li>Performing analysis</li>
+    <li>Building universe</li>
+    <li>Parsing methods</li>
+    <li>Inlining methods</li>
+    <li>Compiling methods</li>
+    <li>Laying out methods</li>
+    <li>Creating image</li>
+  </ol>
+
+  <p>本次 closed-world analysis 找到 18,546 个可达类型、86,152 个可达方法，并为反射注册了 13,816 个方法。没有被证明可达、也没有 hints 的内容可能不会进入最终程序。</p>
+
+  <h2>第三步：检查输出文件</h2>
+  <pre><code>ls -lh build/native/nativeCompile
+file build/native/nativeCompile/native-demo
+ldd build/native/nativeCompile/native-demo</code></pre>
+
+  <p>主程序位于：</p>
+  <pre><code>build/native/nativeCompile/native-demo</code></pre>
+
+  <p>实测它是 stripped 的 Linux x86-64 PIE ELF，可执行文件约 84 MiB。直接动态依赖包括 <code>libc</code>、<code>libz</code> 和 ELF loader。</p>
+
+  <div class="callout">
+    <strong>Native 不等于完全静态。</strong>Java 应用与必要运行时已经变成机器码，但程序仍可能依赖操作系统 ABI、动态库和特定 CPU 指令集。部署到另一台机器前要验证兼容性。
+  </div>
+
+  <h2>第四步：直接运行，不经过 Docker</h2>
+  <pre><code>./build/native/nativeCompile/native-demo \
+  --server.port=8082</code></pre>
+
+  <p>另开终端验证：</p>
+  <pre><code>curl http://127.0.0.1:8082/hello</code></pre>
+
+  <p>本课结果：</p>
+  <pre><code>Hello from GraalVM!</code></pre>
+
+  <table>
+    <tbody>
+      <tr><td>Spring Boot 启动时间</td><td>0.142 秒</td></tr>
+      <tr><td>进程可用时间</td><td>0.156 秒</td></tr>
+      <tr><td>线程数</td><td>18</td></tr>
+      <tr><td>本地进程 RSS</td><td>95,920 KiB</td></tr>
+    </tbody>
+  </table>
+
+  <p>日志里的 “using Java 25.0.2” 是构建/runtime 元数据，并不表示启动了完整 HotSpot JVM。</p>
+
+  <h2>第五步：把测试也编译成原生程序</h2>
+  <pre><code>./gradlew nativeTest</code></pre>
+
+  <p><code>nativeTest</code> 会单独生成：</p>
+  <pre><code>build/native/nativeTestCompile/native-demo-tests</code></pre>
+
+  <p>它包含应用、测试代码、Spring Test、MockMvc 和 JUnit Platform Native 支持，所以不是简单地“拿现有应用二进制跑一次测试”。</p>
+
+  <table>
+    <tbody>
+      <tr><td>测试原生编译</td><td>5 分 12 秒</td></tr>
+      <tr><td>Gradle nativeTest</td><td>5 分 58 秒</td></tr>
+      <tr><td>测试程序大小</td><td>96.73 MB</td></tr>
+      <tr><td>峰值 RSS</td><td>4.88 GB</td></tr>
+      <tr><td>JUnit 原生执行</td><td>135 ms</td></tr>
+    </tbody>
+  </table>
+
+  <pre><code>GreetingControllerTests &gt; returnsGreeting() SUCCESSFUL
+NativeDemoApplicationTests &gt; contextLoads() SUCCESSFUL
+
+2 tests successful
+0 tests failed</code></pre>
+
+  <div class="exercise"
+       data-quiz
+       data-correct-feedback="正确：nativeTest 会把测试框架、测试代码和应用一起编译成独立原生测试程序。"
+       data-incorrect-feedback="再想一下：已有应用二进制并不包含 JUnit 和 Spring Test。">
+    <strong>检查题：</strong><code>nativeTest</code> 是否只是运行 <code>native-demo</code> 应用程序？
+    <div>
+      <button type="button" data-correct="false">是</button>
+      <button type="button" data-correct="true">不是</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>应该记住的命令</h2>
+  <table>
+    <tbody>
+      <tr><td><code>./gradlew test</code></td><td>快速 JVM 测试基线</td></tr>
+      <tr><td><code>./gradlew nativeCompile</code></td><td>生成应用原生程序</td></tr>
+      <tr><td><code>./gradlew nativeRun</code></td><td>构建并运行原生程序</td></tr>
+      <tr><td><code>./gradlew nativeTestCompile</code></td><td>只生成原生测试程序</td></tr>
+      <tr><td><code>./gradlew nativeTest</code></td><td>生成并运行原生测试</td></tr>
+      <tr><td><code>./gradlew bootBuildImage</code></td><td>生成 Native OCI 镜像</td></tr>
+    </tbody>
+  </table>
+
+  <h2>推荐反馈顺序</h2>
+  <pre><code>./gradlew test
+        ↓
+JVM + spring.aot.enabled=true
+        ↓
+./gradlew nativeTest
+        ↓
+./gradlew nativeCompile
+        ↓
+./gradlew bootBuildImage</code></pre>
+
+  <div class="callout warning">
+    <strong>不要用 nativeTest 替代日常单元测试。</strong>JVM 测试适合频繁运行；关键边界、交付前检查和 reachability 修复才运行成本较高的原生测试。
+  </div>
+
+  <h2>下一课</h2>
+  <p>第三课会故意加入一个 JVM 正常、Native 初始失败的反射与资源场景，然后使用 <code>RuntimeHintsRegistrar</code> 修复，并通过 <code>nativeTest</code> 锁定结果。</p>
+
+  <footer>
+    <p>
+      <a href="0001-jdk25-version-triangle.html">上一课：JDK 25 版本三角</a>
+      ·
+      <a href="../learning-records/0003-local-native-compile-and-native-test.md">第二课完整 Markdown 记录</a>
+      ·
+      <a href="../RESOURCES.md">全部课程资源</a>
+    </p>
+    <p>一句话复习：Spring AOT 解决“Spring 太动态”，GraalVM AOT 解决“把 Java 编译为机器码”。</p>
+  </footer>
+</main>
+</body>
+</html>

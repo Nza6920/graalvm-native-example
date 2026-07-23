@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>工具链基线速查｜Spring Boot Native Image</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="kicker">Quick reference</p>
+  <h1>JDK 25 工具链基线</h1>
+  <p class="lead">先确认版本三角，再排查业务代码。</p>
+
+  <table>
+    <thead><tr><th>组件</th><th>课程基线</th><th>边界</th></tr></thead>
+    <tbody>
+      <tr><td>Spring Boot</td><td>4.1.x</td><td>课程项目固定使用 4.1.0</td></tr>
+      <tr><td>GraalVM</td><td>GraalVM for JDK 25</td><td><code>native-image --version</code> 必须可用</td></tr>
+      <tr><td>Gradle JVM</td><td>9.1+</td><td>Gradle 从 9.1 起正式支持在 JDK 25 上运行</td></tr>
+      <tr><td>Gradle Wrapper</td><td>9.5.1</td><td>可在 JDK 25 上运行</td></tr>
+    </tbody>
+  </table>
+
+  <h2>四个检查</h2>
+  <pre><code>java -version
+./gradlew --version
+native-image --version
+./gradlew tasks --all</code></pre>
+
+  <h2>关键任务</h2>
+  <table>
+    <tbody>
+      <tr><td><code>nativeCompile</code></td><td>生成本地原生可执行文件</td></tr>
+      <tr><td><code>nativeRun</code></td><td>运行本地原生可执行文件</td></tr>
+      <tr><td><code>nativeTest</code></td><td>把测试编译为原生程序并执行</td></tr>
+      <tr><td><code>bootBuildImage</code></td><td>通过 Buildpacks 生成原生容器镜像</td></tr>
+    </tbody>
+  </table>
+
+  <footer><a href="../lessons/0001-jdk25-version-triangle.html">返回第一课</a></footer>
+</main>
+</body>
+</html>

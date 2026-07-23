@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第一课：先锁定 JDK 25 版本三角</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="kicker">Lesson 0001 · 约 8 分钟</p>
+  <h1>先锁定 JDK 25 版本三角</h1>
+  <p class="lead">本课的胜利条件：你能在自己的服务目录中证明 Gradle、GraalVM 和 Native Image 任务分别由什么版本提供。</p>
+
+  <div class="callout warning">
+    <strong>先讲结论：</strong>课程项目使用 Spring Boot 4.1.0、Gradle 9.5.1 和 GraalVM JDK 25.0.2。Gradle 从 9.1 起正式支持在 JDK 25 上运行；当前项目已经用这套版本完成 AOT 处理和 JVM 测试。
+  </div>
+
+  <h2>Native Image 到底做了什么？</h2>
+  <p>普通 Spring Boot JAR 把大量决定留到运行时。Native Image 会在构建期从入口开始做静态可达性分析，只把需要的代码、运行时组件和资源编译进特定操作系统与架构的可执行文件。</p>
+  <p>这就是<strong>闭世界假设</strong>：运行时会用到的代码必须在构建期已知。反射、动态代理、JNI、序列化和按名称读取的资源之所以常出问题，是因为静态分析不一定能看见它们。Spring AOT 的工作，就是提前生成代码和提示，帮助 GraalVM 看见这些动态行为。</p>
+
+  <div class="exercise" data-quiz>
+    <strong>检索练习：</strong>Native Image 何时必须知道运行时可达的代码？
+    <div>
+      <button type="button" data-correct="true">构建期确定</button>
+      <button type="button" data-correct="false">运行期发现</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>动手：四条命令建立事实</h2>
+  <p>进入你的 Spring Boot 服务目录，执行：</p>
+  <pre><code>java -version
+./gradlew --version
+native-image --version
+./gradlew tasks --all</code></pre>
+
+  <p>你要从输出中找到四件事：</p>
+  <ol>
+    <li><code>java</code> 是否是 GraalVM JDK 25，而不只是任意 JDK 25。</li>
+    <li>Gradle 版本是否至少为 9.1，以及 Gradle Daemon 实际使用哪个 JVM。</li>
+    <li><code>native-image</code> 是否存在且报告 JDK 25。</li>
+    <li>任务列表是否包含 <code>nativeCompile</code>；没有它通常意味着尚未应用 <code>org.graalvm.buildtools.native</code> 插件。</li>
+  </ol>
+
+  <div class="callout">
+    <strong>不要先改业务代码。</strong>如果前三条版本事实不清楚，后面的 AOT 或反射错误很容易被误诊。把四条命令的输出发给我，我会据此给你下一课的最小 <code>build.gradle</code> 修改。
+  </div>
+
+  <h2>原生构建流水线</h2>
+  <p><code>Java 源码 → JVM 字节码 → Spring AOT 生成物 → GraalVM 可达性分析 → 本机原生可执行文件</code></p>
+  <p>注意最后一步是平台相关的：通常不能在 macOS 上直接构建 Linux 可执行文件。生产环境常在目标平台或匹配的容器构建环境中完成。</p>
+
+  <h2>主要阅读</h2>
+  <p>先读 Spring 官方的 <a href="https://docs.spring.io/spring-boot/4.1/how-to/native-image/developing-your-first-application.html">Developing Your First GraalVM Native Application</a>。关于闭世界和静态分析，再查 <a href="https://www.graalvm.org/jdk25/reference-manual/native-image/">GraalVM JDK 25 Native Image 文档</a>。</p>
+
+  <footer>
+    <p><a href="../reference/toolchain-baseline.html">工具链基线速查</a> · <a href="0002-local-native-compile-and-native-test.html">下一课：本地 nativeCompile 与 nativeTest</a> · <a href="../RESOURCES.md">全部课程资源</a></p>
+    <p>任何概念或命令不清楚，直接问我；把四条命令的输出贴回来即可继续。</p>
+  </footer>
+</main>
+</body>
+</html>
