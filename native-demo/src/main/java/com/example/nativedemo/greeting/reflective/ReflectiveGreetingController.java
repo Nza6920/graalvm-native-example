@@ -1,4 +1,4 @@
-package com.example.nativedemo;
+package com.example.nativedemo.greeting.reflective;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;

@@ -1,4 +1,4 @@
-package com.example.nativedemo;
+package com.example.nativedemo.greeting.reflective;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;

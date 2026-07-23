@@ -1,4 +1,4 @@
-package com.example.nativedemo;
+package com.example.nativedemo.greeting.reflective;
 
 public class FriendlyGreetingPlugin implements GreetingPlugin {
 

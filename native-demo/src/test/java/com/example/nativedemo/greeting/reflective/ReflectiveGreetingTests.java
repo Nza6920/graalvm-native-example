@@ -1,4 +1,4 @@
-package com.example.nativedemo;
+package com.example.nativedemo.greeting.reflective;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

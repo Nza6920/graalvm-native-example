@@ -21,7 +21,7 @@
   <p>应用没有直接写 <code>new FriendlyGreetingPlugin()</code>，而是从配置读取类名：</p>
 
   <pre><code>demo.greeting-plugin=\
-com.example.nativedemo.FriendlyGreetingPlugin</code></pre>
+com.example.nativedemo.greeting.reflective.FriendlyGreetingPlugin</code></pre>
 
   <p>服务在运行时才加载它：</p>
 
@@ -32,7 +32,7 @@ return (String) pluginType.getMethod("message").invoke(plugin);</code></pre>
   <h2>先建立 JVM 绿灯</h2>
 
   <pre><code>./gradlew test \
-  --tests com.example.nativedemo.ReflectiveGreetingTests</code></pre>
+  --tests com.example.nativedemo.greeting.reflective.ReflectiveGreetingTests</code></pre>
 
   <p>结果：<code>BUILD SUCCESSFUL</code>。JVM 的 classpath 中保留了所有应用类，因此运行时可以按字符串寻找该类。</p>
 
@@ -46,7 +46,7 @@ return (String) pluginType.getMethod("message").invoke(plugin);</code></pre>
 1 test failed
 
 Caused by: java.lang.ClassNotFoundException:
-com.example.nativedemo.FriendlyGreetingPlugin</code></pre>
+com.example.nativedemo.greeting.reflective.FriendlyGreetingPlugin</code></pre>
 
   <p>这次原生测试程序编译耗时 5 分 14 秒，完整 Gradle 任务耗时 5 分 46 秒，峰值 RSS 5.18 GB。失败发生在生成后的原生程序运行阶段，不是 Java 编译阶段，也不是 Native Image 构建阶段。</p>
 
