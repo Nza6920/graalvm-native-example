@@ -20,6 +20,10 @@
   `BP_JVM_VERSION`、JRE/JDK 选择、Native Image 和 Buildpack 下载行为。
 - [Spring Framework 7：AOP 代理机制](https://docs.spring.io/spring-framework/reference/core/aop/proxying.html)
   JDK 动态代理、CGLIB、self-invocation、`final` 方法和类代理限制。
+- [Spring Framework 7：AOT 官方文档](https://docs.spring.io/spring-framework/reference/core/aot.html)
+  Spring AOT、runtime hints 和 Native Image 可达性问题的框架级说明。
+- [Spring Framework：`@ImportRuntimeHints` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/context/annotation/ImportRuntimeHints.html)
+  导入 `RuntimeHintsRegistrar` 的当前 API 与条件注册语义。
 
 ## Wisdom (Communities)
 

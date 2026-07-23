@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第三课：用 RuntimeHints 修复反射可达性</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="kicker">Lesson 0003 · 已验证 · JVM 绿灯 / Native 红灯 / Hints 绿灯</p>
+  <h1>用 RuntimeHints 修复反射可达性</h1>
+  <p class="lead">本课的胜利条件：能够解释为什么同一段反射代码在 JVM 正常、Native 失败，并用最小范围的 runtime hint 修复。</p>
+
+  <div class="callout">
+    <strong>本课已实测完成：</strong>先稳定复现 <code>ClassNotFoundException</code>，再用精确到构造器和方法的 hint 修复，最终 3/3 原生测试通过。
+  </div>
+
+  <h2>实验场景</h2>
+  <p>应用没有直接写 <code>new FriendlyGreetingPlugin()</code>，而是从配置读取类名：</p>
+
+  <pre><code>demo.greeting-plugin=\
+com.example.nativedemo.FriendlyGreetingPlugin</code></pre>
+
+  <p>服务在运行时才加载它：</p>
+
+  <pre><code>Class&lt;?&gt; pluginType = Class.forName(pluginClassName);
+Object plugin = pluginType.getDeclaredConstructor().newInstance();
+return (String) pluginType.getMethod("message").invoke(plugin);</code></pre>
+
+  <h2>先建立 JVM 绿灯</h2>
+
+  <pre><code>./gradlew test \
+  --tests com.example.nativedemo.ReflectiveGreetingTests</code></pre>
+
+  <p>结果：<code>BUILD SUCCESSFUL</code>。JVM 的 classpath 中保留了所有应用类，因此运行时可以按字符串寻找该类。</p>
+
+  <h2>再观察 Native 红灯</h2>
+
+  <pre><code>./gradlew nativeTest</code></pre>
+
+  <p><code>nativeTest</code> 不支持普通 <code>Test</code> 任务的 <code>--tests</code> 过滤器，因此这里运行完整原生测试套件。</p>
+
+  <pre><code>2 tests successful
+1 test failed
+
+Caused by: java.lang.ClassNotFoundException:
+com.example.nativedemo.FriendlyGreetingPlugin</code></pre>
+
+  <p>这次原生测试程序编译耗时 5 分 14 秒，完整 Gradle 任务耗时 5 分 46 秒，峰值 RSS 5.18 GB。失败发生在生成后的原生程序运行阶段，不是 Java 编译阶段，也不是 Native Image 构建阶段。</p>
+
+  <h2>为什么源码里有类，Native 仍找不到？</h2>
+  <p>Native Image 使用闭世界假设。配置文件里的字符串只有在运行时才变成类名；静态分析没有看到对实现类的直接调用，也没有收到反射提示，因此可以把该类当作不可达代码移除。</p>
+
+  <pre><code>JVM:
+完整 classpath → 运行时按名称寻找 → 找到
+
+Native:
+构建期可达性分析 → 没有静态边 → 移除
+                        ↑
+                  RuntimeHints 要补的边</code></pre>
+
+  <div class="exercise"
+       data-quiz
+       data-correct-feedback="正确：源码存在不等于 Native Image 判定它可达；配置驱动的反射需要显式描述。"
+       data-incorrect-feedback="再看一次故障边界：Native Image 已构建成功，失败是原生程序运行时找不到类。">
+    <strong>检索练习：</strong>最准确的根因是哪一个？
+    <div>
+      <button type="button" data-correct="false">原生程序完全禁用反射</button>
+      <button type="button" data-correct="true">构建阶段缺少可达信息</button>
+      <button type="button" data-correct="false">配置资源没有打进程序</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>最小修复：精确注册调用点</h2>
+  <p>实现 <code>RuntimeHintsRegistrar</code>，注册目标类型、无参构造器和 <code>message()</code>。这里选择 <code>ExecutableMode.INVOKE</code>，因为程序不只是查看成员，还会实际调用它们。</p>
+
+  <pre><code>public final class GreetingRuntimeHints
+        implements RuntimeHintsRegistrar {
+
+    @Override
+    public void registerHints(
+            RuntimeHints hints, ClassLoader classLoader) {
+        hints.reflection()
+            .registerType(FriendlyGreetingPlugin.class, type -&gt; type
+                .withConstructor(List.of(), ExecutableMode.INVOKE)
+                .withMethod(
+                    "message", List.of(), ExecutableMode.INVOKE));
+    }
+}</code></pre>
+
+  <p>然后让 Spring AOT 导入它：</p>
+
+  <pre><code>@SpringBootApplication
+@ImportRuntimeHints(GreetingRuntimeHints.class)
+public class NativeDemoApplication {
+    // ...
+}</code></pre>
+
+  <div class="callout warning">
+    <strong>不要习惯性注册所有成员。</strong>如果只调用一个构造器和一个方法，就精确注册这两个调用点。范围越宽，越难知道应用真正依赖哪些动态行为，也可能增加镜像元数据。
+  </div>
+
+  <h2>绿灯证据</h2>
+
+  <pre><code>./gradlew nativeTest
+
+3 tests successful
+0 tests failed
+BUILD SUCCESSFUL</code></pre>
+
+  <table>
+    <thead>
+      <tr><th>指标</th><th>缺少 hints</th><th>加入 hints</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Native Image 编译</td><td>5 分 14 秒</td><td>4 分 57 秒</td></tr>
+      <tr><td>完整 Gradle 任务</td><td>5 分 46 秒</td><td>5 分 27 秒</td></tr>
+      <tr><td>峰值 RSS</td><td>5.18 GB</td><td>5.13 GB</td></tr>
+      <tr><td>可达类型</td><td>22,399</td><td>22,402</td></tr>
+      <tr><td>可达方法</td><td>97,517</td><td>97,519</td></tr>
+      <tr><td>原生测试结果</td><td>2/3</td><td>3/3</td></tr>
+    </tbody>
+  </table>
+
+  <p>统计差值与最小修复方向一致，但数字只能说明 metadata 发生变化；真正的正确性证据仍然是原生测试成功执行了反射路径。</p>
+
+  <h2>诊断顺序</h2>
+
+  <pre><code>JVM 测试失败
+  → 先修普通业务或 Spring 配置
+
+JVM 成功，Native Image 构建失败
+  → 看构建期可达性或不支持特性
+
+Native Image 构建成功，运行时报 ClassNotFoundException
+  → 检查配置驱动加载和 reflection hints</code></pre>
+
+  <h2>下一课</h2>
+  <p>下一课用同样的红—绿方法处理 classpath 资源：让 JVM 能读到模板文件、Native 初始读不到，再使用 resource hints 修复。之后再单独处理动态代理，避免三个故障原因混在一起。</p>
+
+  <p class="meta">主资料：<a href="https://docs.spring.io/spring-framework/reference/core/aot.html">Spring Framework AOT 官方文档</a> · <a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/context/annotation/ImportRuntimeHints.html"><code>@ImportRuntimeHints</code> Javadoc</a> · <a href="../reference/runtime-hints-cheatsheet.html">RuntimeHints 速查表</a></p>
+
+  <footer>
+    <p>
+      <a href="0002-local-native-compile-and-native-test.html">上一课：本地 nativeCompile 与 nativeTest</a>
+      ·
+      <a href="../learning-records/0004-runtime-hints-reflection.md">本课学习记录</a>
+      ·
+      <a href="../RESOURCES.md">全部课程资源</a>
+    </p>
+    <p>有任何不清楚的地方，直接问老师；不要带着模糊概念继续添加 hints。</p>
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spring RuntimeHints 速查表</title>
+  <link rel="stylesheet" href="../assets/course.css">
+</head>
+<body>
+<main>
+  <p class="kicker">Reference · Spring Framework 7 / GraalVM JDK 25</p>
+  <h1>RuntimeHints 速查表</h1>
+  <p class="lead">当 JVM 正常、Native 异常时，用故障行为选择最小提示类型。</p>
+
+  <table>
+    <thead>
+      <tr><th>动态行为</th><th>入口</th><th>典型症状</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>按名称加载和调用类</td><td><code>hints.reflection()</code></td><td><code>ClassNotFoundException</code>、找不到构造器或方法</td></tr>
+      <tr><td>读取 classpath 文件</td><td><code>hints.resources()</code></td><td><code>getResourceAsStream()</code> 返回 <code>null</code></td></tr>
+      <tr><td>创建 JDK 动态代理</td><td><code>hints.proxies()</code></td><td>代理接口组合未注册</td></tr>
+      <tr><td>JNI 访问</td><td><code>hints.jni()</code></td><td>Native 方法或字段不可访问</td></tr>
+    </tbody>
+  </table>
+
+  <h2>精确反射注册</h2>
+  <pre><code>hints.reflection().registerType(MyPlugin.class, type -&gt; type
+    .withConstructor(List.of(), ExecutableMode.INVOKE)
+    .withMethod("run", List.of(), ExecutableMode.INVOKE));</code></pre>
+
+  <h2>导入 registrar</h2>
+  <pre><code>@ImportRuntimeHints(MyRuntimeHints.class)</code></pre>
+
+  <h2>判断流程</h2>
+  <pre><code>普通 JVM 测试
+   ↓ 通过
+原生测试
+   ↓ 失败
+按异常定位动态行为
+   ↓
+添加最小 hint
+   ↓
+重新构建并运行原生测试</code></pre>
+
+  <div class="callout warning">
+    <strong>提示不是越多越好。</strong>优先精确注册实际调用的类型、构造器、方法、资源模式或接口组合。
+  </div>
+
+  <footer>
+    <p><a href="../lessons/0003-runtime-hints-reflection.html">返回第三课</a> · <a href="../RESOURCES.md">官方资料</a></p>
+  </footer>
+</main>
+</body>
+</html>
