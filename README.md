@@ -51,15 +51,19 @@ com.example.nativedemo
 ├── NativeDemoApplication
 └── greeting
     ├── GreetingController
-    └── reflective
+    ├── reflective
         ├── GreetingPlugin
         ├── FriendlyGreetingPlugin
         ├── ReflectiveGreetingService
         ├── ReflectiveGreetingController
         └── GreetingRuntimeHints
+    └── resource
+        ├── ResourceGreetingService
+        ├── ResourceGreetingController
+        └── ResourceGreetingRuntimeHints
 ```
 
-Keeping the reflective implementation and its reachability metadata in the same package makes the native-specific behavior easier to locate and maintain.
+Keeping each dynamic implementation and its reachability metadata in the same feature package makes native-specific behavior easier to locate and maintain.
 
 ## Prerequisites
 
@@ -94,6 +98,7 @@ cd native-demo
 # In another terminal
 curl http://127.0.0.1:8080/hello
 curl http://127.0.0.1:8080/reflective-hello
+curl http://127.0.0.1:8080/resource-hello
 ```
 
 Expected responses:
@@ -101,6 +106,7 @@ Expected responses:
 ```text
 Hello from GraalVM!
 Hello from a reflective plugin!
+Hello from a classpath resource!
 ```
 
 ## Build commands
@@ -140,6 +146,7 @@ See the complete implementation in [`GreetingRuntimeHints.java`](native-demo/src
 1. [JDK 25 and the native version triangle](lessons/0001-jdk25-version-triangle.html)
 2. [Local `nativeCompile` and `nativeTest`](lessons/0002-local-native-compile-and-native-test.html)
 3. [Fix reflection reachability with `RuntimeHints`](lessons/0003-runtime-hints-reflection.html)
+4. [Package dynamic classpath resources with `ResourceHints`](lessons/0004-resource-hints.html)
 
 References:
 
@@ -228,12 +235,16 @@ com.example.nativedemo
 ├── NativeDemoApplication
 └── greeting
     ├── GreetingController
-    └── reflective
+    ├── reflective
         ├── GreetingPlugin
         ├── FriendlyGreetingPlugin
         ├── ReflectiveGreetingService
         ├── ReflectiveGreetingController
         └── GreetingRuntimeHints
+    └── resource
+        ├── ResourceGreetingService
+        ├── ResourceGreetingController
+        └── ResourceGreetingRuntimeHints
 ```
 
 反射实现和对应的可达性元数据放在同一个包中，让 Native 专属行为更容易定位和维护。
@@ -271,6 +282,7 @@ cd native-demo
 # 在另一个终端验证
 curl http://127.0.0.1:8080/hello
 curl http://127.0.0.1:8080/reflective-hello
+curl http://127.0.0.1:8080/resource-hello
 ```
 
 预期响应：
@@ -278,6 +290,7 @@ curl http://127.0.0.1:8080/reflective-hello
 ```text
 Hello from GraalVM!
 Hello from a reflective plugin!
+Hello from a classpath resource!
 ```
 
 ## 构建命令
@@ -317,6 +330,7 @@ hints.reflection().registerType(FriendlyGreetingPlugin.class, type -> type
 1. [JDK 25 与 Native 版本三角](lessons/0001-jdk25-version-triangle.html)
 2. [本地 `nativeCompile` 与 `nativeTest`](lessons/0002-local-native-compile-and-native-test.html)
 3. [使用 `RuntimeHints` 修复反射可达性](lessons/0003-runtime-hints-reflection.html)
+4. [使用 `ResourceHints` 打包动态 classpath 资源](lessons/0004-resource-hints.html)
 
 参考资料：
 

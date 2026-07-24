@@ -24,6 +24,8 @@
   Spring AOT、runtime hints 和 Native Image 可达性问题的框架级说明。
 - [Spring Framework：`@ImportRuntimeHints` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/context/annotation/ImportRuntimeHints.html)
   导入 `RuntimeHintsRegistrar` 的当前 API 与条件注册语义。
+- [Spring Framework：`ResourceHints` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/aot/hint/ResourceHints.html)
+  注册 Native Image 运行时需要的 classpath 资源模式。
 
 ## Wisdom (Communities)
 

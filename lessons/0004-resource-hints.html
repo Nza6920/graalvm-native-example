@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第四课：用 ResourceHints 打包动态资源</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="kicker">Lesson 0004 · 已验证 · JVM 绿灯 / Native 红灯 / Hints 绿灯</p>
+  <h1>用 ResourceHints 打包动态资源</h1>
+  <p class="lead">本课的胜利条件：能够解释为什么资源在 JVM classpath 中存在，Native 运行时却找不到，并用最小资源模式修复。</p>
+
+  <div class="callout">
+    <strong>本课已实测完成：</strong>先稳定复现资源缺失，再注册一个精确资源模式，最终 4/4 原生测试通过。
+  </div>
+
+  <h2>实验场景</h2>
+  <p>资源文件位于：</p>
+
+  <pre><code>src/main/resources/greetings/resource-greeting.txt</code></pre>
+
+  <p>资源路径不是代码常量，而是来自配置：</p>
+
+  <pre><code>demo.greeting-resource=greetings/resource-greeting.txt</code></pre>
+
+  <p>服务在运行时按这个路径读取：</p>
+
+  <pre><code>ClassLoader classLoader =
+    ResourceGreetingService.class.getClassLoader();
+
+try (InputStream input =
+        classLoader.getResourceAsStream(resourcePath)) {
+    if (input == null) {
+        throw new IllegalStateException(
+            "Classpath resource not found: " + resourcePath);
+    }
+    // ...
+}</code></pre>
+
+  <h2>JVM 绿灯</h2>
+
+  <pre><code>./gradlew test \
+  --tests com.example.nativedemo.greeting.resource.ResourceGreetingTests
+
+BUILD SUCCESSFUL</code></pre>
+
+  <p>普通 JVM 使用完整应用 classpath，因此 <code>src/main/resources</code> 复制出的文件可以直接读取。</p>
+
+  <h2>Native 红灯</h2>
+
+  <pre><code>./gradlew nativeTest
+
+3 tests successful
+1 test failed
+
+Classpath resource not found:
+greetings/resource-greeting.txt</code></pre>
+
+  <table>
+    <tbody>
+      <tr><td>Native Image 编译</td><td>5 分 11 秒</td></tr>
+      <tr><td>完整 Gradle 任务</td><td>5 分 47 秒</td></tr>
+      <tr><td>峰值 RSS</td><td>5.27 GB</td></tr>
+      <tr><td>原生测试执行</td><td>537 ms</td></tr>
+      <tr><td>原生测试结果</td><td>3/4</td></tr>
+    </tbody>
+  </table>
+
+  <h2>配置可读，不代表所有资源都已打包</h2>
+  <p>服务已经从 <code>application.properties</code> 中取得正确路径，说明应用配置本身存在。缺少的是那个由动态字符串指向的自定义文本文件。</p>
+
+  <pre><code>JVM:
+完整 classpath → 动态路径 → 找到资源
+
+Native:
+构建期资源集合 → 没有模式匹配 → 文件未进镜像
+                              ↑
+                     ResourceHints 要补的信息</code></pre>
+
+  <div class="exercise"
+       data-quiz
+       data-correct-feedback="正确：动态资源路径没有被构建期分析识别，需要 resource hint 明确把文件加入镜像。"
+       data-incorrect-feedback="再看故障边界：控制器已经执行，配置路径也已读取，缺少的是目标资源文件。">
+    <strong>检索练习：</strong>最准确的根因是哪一个？
+    <div>
+      <button type="button" data-correct="false">原生程序不支持文本文件</button>
+      <button type="button" data-correct="true">资源文件没有注册进镜像</button>
+      <button type="button" data-correct="false">资源控制器没有成功扫描</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>最小修复：注册一个资源模式</h2>
+  <p>在 <code>greeting.resource</code> 模块内部实现 registrar，只注册实际读取的文件：</p>
+
+  <pre><code>public final class ResourceGreetingRuntimeHints
+        implements RuntimeHintsRegistrar {
+
+    @Override
+    public void registerHints(
+            RuntimeHints hints, ClassLoader classLoader) {
+        hints.resources().registerPattern(
+            "greetings/resource-greeting.txt");
+    }
+}</code></pre>
+
+  <p>然后把 hint 的导入也留在这个模块：</p>
+
+  <pre><code>@RestController
+@ImportRuntimeHints(ResourceGreetingRuntimeHints.class)
+class ResourceGreetingController {
+    // ...
+}</code></pre>
+
+  <p>Spring AOT 生成的 reachability metadata 包含：</p>
+
+  <pre><code>{"glob":"greetings"}
+{"glob":"greetings\/resource-greeting.txt"}</code></pre>
+
+  <div class="callout warning">
+    <strong>模式不要写得过宽。</strong><code>greetings/**</code> 适合确实要读取整个目录的场景；这里只用一个文件，就注册完整路径。
+  </div>
+
+  <h2>绿灯证据</h2>
+
+  <pre><code>./gradlew nativeTest
+
+4 tests successful
+0 tests failed
+BUILD SUCCESSFUL</code></pre>
+
+  <table>
+    <thead>
+      <tr><th>指标</th><th>缺少 hints</th><th>加入 hints</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Native Image 编译</td><td>5 分 11 秒</td><td>5 分 56 秒</td></tr>
+      <tr><td>完整 Gradle 任务</td><td>5 分 47 秒</td><td>6 分 19 秒</td></tr>
+      <tr><td>峰值 RSS</td><td>5.27 GB</td><td>5.66 GB</td></tr>
+      <tr><td>可达类型</td><td>22,414</td><td>22,415</td></tr>
+      <tr><td>可达方法</td><td>97,549</td><td>97,549</td></tr>
+      <tr><td>镜像资源</td><td>431</td><td>433</td></tr>
+      <tr><td>原生测试结果</td><td>3/4</td><td>4/4</td></tr>
+    </tbody>
+  </table>
+
+  <p>绿灯构建只增加 1 个可达类型，反射统计没有变化，镜像资源增加 2 个。这说明 resource hint 注册的是资源目录和文件，而不是反射成员。</p>
+
+  <h2>ReflectionHints 与 ResourceHints</h2>
+
+  <table>
+    <thead>
+      <tr><th>问题</th><th>使用的 hint</th><th>补进镜像的内容</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>按字符串加载并调用 Java 类型</td><td><code>reflection()</code></td><td>类型和成员调用 metadata</td></tr>
+      <tr><td>按动态路径读取 classpath 文件</td><td><code>resources()</code></td><td>匹配的资源目录和文件字节</td></tr>
+    </tbody>
+  </table>
+
+  <h2>下一课</h2>
+  <p>第五课将制造 JDK 动态代理可达性问题，学习为什么代理的接口组合也必须在构建期已知，并用 proxy hints 修复。</p>
+
+  <p class="meta">主资料：<a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/aot/hint/ResourceHints.html"><code>ResourceHints</code> Javadoc</a> · <a href="../reference/runtime-hints-cheatsheet.html">RuntimeHints 速查表</a></p>
+
+  <footer>
+    <p>
+      <a href="0003-runtime-hints-reflection.html">上一课：反射可达性</a>
+      ·
+      <a href="../learning-records/0005-resource-hints.md">本课学习记录</a>
+      ·
+      <a href="../RESOURCES.md">全部课程资源</a>
+    </p>
+    <p>有任何不清楚的地方，直接问老师；先定位缺失的动态行为，再选择 hint 类型。</p>
+  </footer>
+</main>
+</body>
+</html>
