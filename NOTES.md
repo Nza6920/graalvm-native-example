@@ -12,7 +12,7 @@
 - [x] 第 3 课：制造反射可达性故障，并用精确的 `RuntimeHintsRegistrar` 修复。
 - [x] 第 4 课：制造并修复 classpath 资源可达性问题。
 - [x] 第 5 课：制造并修复 JDK 动态代理可达性问题。
-- [ ] 第 6 课：测试冷启动、预热、吞吐量、内存和镜像部署边界。
+- [x] 第 6 课：测试冷启动、预热、吞吐量、内存和镜像部署边界。
 
 课程完整记录：
 
@@ -26,14 +26,20 @@
 - [第四课学习记录](learning-records/0005-resource-hints.md)
 - [第五课离线 HTML：用 ProxyHints 注册 JDK 动态代理](lessons/0005-jdk-proxy-hints.html)
 - [第五课学习记录](learning-records/0006-jdk-proxy-hints.md)
+- [第六课离线 HTML：正确比较 JVM 与 Native](lessons/0006-jvm-native-performance.html)
+- [第六课学习记录](learning-records/0007-jvm-native-performance.md)
+- [可复现基准说明](native-demo/benchmark/README.md)
 
-## 下一课入口
+## 六课主线完成
 
-第 6 课将使用相同的接口和请求条件，对比 JVM 与 Native 的冷启动、预热、吞吐量、内存和部署边界。
+已经完成构建、AOT 概念、原生测试、reflection/resources/proxies
+可达性修复以及 JVM/Native 实测选型。
 
-开始前的快速基线：
+后续可做一个真实第三方依赖兼容性扩展课，完成 `MISSION.md` 中最后一个尚未
+单独验证的成功条件。当前项目快速回归：
 
 ```bash
 cd native-demo
 ./gradlew test
+./gradlew nativeTest
 ```

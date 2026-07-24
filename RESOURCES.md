@@ -28,6 +28,8 @@
   注册 Native Image 运行时需要的 classpath 资源模式。
 - [Spring Framework：`ProxyHints` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/aot/hint/ProxyHints.html)
   注册 Native Image 构建期需要准备的有序 JDK 代理接口组合。
+- [`wrk` 官方仓库](https://github.com/wg/wrk)
+  第六课使用的多线程 HTTP 基准工具；课程脚本保存每轮原始结果并比较中位数。
 
 ## Wisdom (Communities)
 

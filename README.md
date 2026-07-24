@@ -35,6 +35,7 @@ A hands-on GraalVM Native Image course using JDK 25, Spring Boot 4, and Gradle, 
 ```text
 .
 ├── native-demo/       # Spring Boot sample application
+│   └── benchmark/     # Reproducible JVM/native HTTP benchmark
 ├── lessons/           # Offline interactive course pages
 ├── learning-records/  # Verified learning outcomes and experiments
 ├── reference/         # Printable cheat sheets
@@ -75,6 +76,7 @@ Keeping each dynamic implementation and its reachability metadata in the same fe
 - A supported native build environment; this course was verified on Linux x86-64
 - GraalVM JDK 25 with `native-image`
 - GCC and standard native build dependencies
+- `wrk`, only for the JVM/native HTTP benchmark
 - Docker, only for `bootBuildImage`
 
 With SDKMAN, select an installed GraalVM JDK 25 distribution:
@@ -155,6 +157,7 @@ See the complete implementation in [`GreetingRuntimeHints.java`](native-demo/src
 3. [Fix reflection reachability with `RuntimeHints`](lessons/0003-runtime-hints-reflection.html)
 4. [Package dynamic classpath resources with `ResourceHints`](lessons/0004-resource-hints.html)
 5. [Register JDK dynamic proxies with `ProxyHints`](lessons/0005-jdk-proxy-hints.html)
+6. [Measure JVM vs. Native without misleading benchmarks](lessons/0006-jvm-native-performance.html)
 
 References:
 
@@ -175,6 +178,25 @@ Measurements from this machine are examples, not universal benchmarks:
 - Native test execution: well under one second after compilation
 
 Most of the time is spent on local reachability analysis and machine-code compilation, not downloading dependencies.
+
+## Measured JVM vs. Native performance
+
+On the course machine, using the same `/hello` endpoint, five interleaved startup
+runs and three warmed `wrk` trials produced these medians:
+
+| Metric | JVM | Native |
+| --- | ---: | ---: |
+| Process start to HTTP ready | 5663.677 ms | 144.847 ms |
+| RSS at ready | 268588 KiB | 94624 KiB |
+| Warmed throughput | 18597.64 req/s | 13427.63 req/s |
+| RSS under load | 272976 KiB | 101424 KiB |
+
+Native started about 39 times faster and used about 65% less memory at readiness,
+while the JVM delivered about 38% higher warmed throughput in this small endpoint
+test. These are machine-specific observations, not universal promises.
+
+Reproduce the benchmark and inspect every trial in
+[`native-demo/benchmark/`](native-demo/benchmark/README.md).
 
 ## Buildpack proxy
 
@@ -227,6 +249,7 @@ Change or remove it if the host proxy is not available. `host.docker.internal` l
 ```text
 .
 ├── native-demo/       # Spring Boot 示例应用
+│   └── benchmark/     # 可复现的 JVM/Native HTTP 基准
 ├── lessons/           # 可离线打开的交互式课程
 ├── learning-records/  # 已验证的学习成果与实验记录
 ├── reference/         # 适合打印的速查表
@@ -267,6 +290,7 @@ com.example.nativedemo
 - Native Image 支持的本机构建环境；本课程已在 Linux x86-64 上验证
 - 带有 `native-image` 的 GraalVM JDK 25
 - GCC 和标准原生构建依赖
+- `wrk`，仅用于 JVM/Native HTTP 基准
 - Docker，仅在执行 `bootBuildImage` 时需要
 
 使用 SDKMAN 选择已经安装的 GraalVM JDK 25：
@@ -347,6 +371,7 @@ hints.reflection().registerType(FriendlyGreetingPlugin.class, type -> type
 3. [使用 `RuntimeHints` 修复反射可达性](lessons/0003-runtime-hints-reflection.html)
 4. [使用 `ResourceHints` 打包动态 classpath 资源](lessons/0004-resource-hints.html)
 5. [使用 `ProxyHints` 注册 JDK 动态代理](lessons/0005-jdk-proxy-hints.html)
+6. [避免误导地测量 JVM 与 Native](lessons/0006-jvm-native-performance.html)
 
 参考资料：
 
@@ -367,6 +392,24 @@ HTML 课程页面可以离线使用，直接在浏览器中打开即可。
 - 编译完成后，原生测试执行时间远低于 1 秒
 
 大部分时间用于本机可达性分析和机器码编译，而不是下载依赖。
+
+## JVM 与 Native 实测
+
+在课程机器上，对同一个 `/hello` 端点执行 5 轮交错启动和 3 轮预热后的
+`wrk` 压测，得到以下中位数：
+
+| 指标 | JVM | Native |
+| --- | ---: | ---: |
+| 进程启动到 HTTP 就绪 | 5663.677 ms | 144.847 ms |
+| 就绪 RSS | 268588 KiB | 94624 KiB |
+| 预热吞吐量 | 18597.64 req/s | 13427.63 req/s |
+| 压测期 RSS | 272976 KiB | 101424 KiB |
+
+Native 启动约快 39 倍、就绪内存低约 65%；这个简单端点中，JVM 预热吞吐
+约高 38%。这些是当前机器的观察结果，不是对所有应用的性能承诺。
+
+复现命令和每轮完整结果位于
+[`native-demo/benchmark/`](native-demo/benchmark/README.md)。
 
 ## Buildpack 代理
 

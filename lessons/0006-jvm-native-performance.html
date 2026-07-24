@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第六课：正确比较 JVM 与 Native</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="kicker">Lesson 0006 · 已验证 · 5 轮启动 / 3 轮吞吐</p>
+  <h1>正确比较 JVM 与 Native</h1>
+  <p class="lead">本课的胜利条件：不再用单次启动、单个文件大小或一句“Native 更快”下结论，而是按工作负载选择运行时。</p>
+
+  <div class="callout">
+    <strong>本机结论：</strong>Native 冷启动约快 39 倍、就绪 RSS 低约
+    65%；但预热后的 JVM 吞吐量约高 38%。Native 优化的是启动和占用，
+    不承诺长期吞吐一定胜过 JVM。
+  </div>
+
+  <h2>先定义公平的实验</h2>
+
+  <table>
+    <tbody>
+      <tr><td>应用</td><td>同一份 Spring Boot 4.1.0 代码</td></tr>
+      <tr><td>端点</td><td><code>GET /hello</code>，无数据库与外部网络</td></tr>
+      <tr><td>启动</td><td>从创建进程到 HTTP 返回 2xx，交错执行 5 轮</td></tr>
+      <tr><td>吞吐</td><td>先预热 5 秒，再用 <code>wrk</code> 测 3 × 10 秒</td></tr>
+      <tr><td>并发</td><td>4 个压测线程，32 个连接</td></tr>
+      <tr><td>统计</td><td>比较中位数，不挑选最好的一轮</td></tr>
+    </tbody>
+  </table>
+
+  <p>客户端和服务端运行在同一台 WSL2 主机，因此这是当前项目的相对实验，
+  不是可移植到所有机器的产品性能数字。这里也没有清除操作系统页缓存，
+  所以准确名称是“新进程启动”，不是磁盘级绝对冷启动。</p>
+
+  <h2>一条命令复现</h2>
+
+  <pre><code>cd native-demo
+./gradlew bootJar nativeCompile
+./benchmark/run-comparison.sh</code></pre>
+
+  <p>脚本会生成 <code>startup.tsv</code>、<code>throughput.tsv</code>、
+  <code>artifacts.tsv</code> 和每轮原始 <code>wrk</code> 输出。完整参数说明见
+  <a href="../native-demo/benchmark/README.md">benchmark/README.md</a>。</p>
+
+  <h2>结果一：启动与就绪内存</h2>
+
+  <table>
+    <thead>
+      <tr><th>中位数</th><th>JVM</th><th>Native</th><th>观察</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>启动到 HTTP 就绪</td><td>5663.677 ms</td><td>144.847 ms</td><td>Native 快 39.09×</td></tr>
+      <tr><td>就绪 RSS</td><td>268588 KiB</td><td>94624 KiB</td><td>Native 低 64.8%</td></tr>
+    </tbody>
+  </table>
+
+  <p>Native 在构建期完成了闭世界分析、AOT 处理和机器码编译，启动时不需要
+  启动 JVM、加载大量 class 并等待 JIT。因此它很适合按需扩容、CLI、短任务
+  和对容器内存密度敏感的服务。</p>
+
+  <h2>结果二：预热吞吐与延迟</h2>
+
+  <table>
+    <thead>
+      <tr><th>中位数</th><th>JVM</th><th>Native</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>吞吐量</td><td>18597.64 req/s</td><td>13427.63 req/s</td></tr>
+      <tr><td>p50 延迟</td><td>1.476 ms</td><td>2.070 ms</td></tr>
+      <tr><td>p95 延迟</td><td>3.744 ms</td><td>4.901 ms</td></tr>
+      <tr><td>压测期 RSS</td><td>272976 KiB</td><td>101424 KiB</td></tr>
+    </tbody>
+  </table>
+
+  <p>本实验的 JVM 吞吐中位数比 Native 高 38.5%。HotSpot 会观察真实运行
+  路径，再由 JIT 编译和重新优化热点代码；长时间稳定运行时，这种自适应优化
+  可能超过构建期一次性完成的 AOT 编译。Native 仍保留明显的内存优势。</p>
+
+  <div class="exercise"
+       data-quiz
+       data-correct-feedback="正确：本实验展示的是不同优化目标，选择必须结合启动、内存和长期吞吐。"
+       data-incorrect-feedback="再看两张表：Native 赢了启动和 RSS，但 JVM 赢了预热吞吐。">
+    <strong>判断练习：</strong>根据本次结果，哪个结论最准确？
+    <div>
+      <button type="button" data-correct="false">Native 所有性能指标都更好</button>
+      <button type="button" data-correct="true">Native 与 JVM 各有优势区间</button>
+      <button type="button" data-correct="false">JVM 所有部署场景都更合适</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>结果三：为什么 Native 单文件反而更大？</h2>
+
+  <table>
+    <thead>
+      <tr><th>产物</th><th>单文件大小</th><th>运行依赖</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Boot JAR</td><td>19.13 MiB</td><td>还需要匹配的 JRE 和系统环境</td></tr>
+      <tr><td>Native executable</td><td>83.50 MiB</td><td>不需要安装 JRE，仍依赖 OS/架构及少量动态库</td></tr>
+    </tbody>
+  </table>
+
+  <p>Native 可执行文件包含应用、依赖中可达的机器码、镜像堆、资源和运行时
+  支撑代码，所以它比 JAR 大很正常。JAR 只是部署集合的一部分；公平的容器比较
+  应该比较完整 OCI 镜像、启动、RSS、安全更新流程和目标平台，而不是只比较
+  两个文件。</p>
+
+  <h2>部署边界</h2>
+
+  <table>
+    <thead>
+      <tr><th>问题</th><th>JVM</th><th>Native</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>跨平台</td><td>JAR 可由目标平台的兼容 JRE 运行</td><td>必须为目标 OS 与 CPU 架构构建</td></tr>
+      <tr><td>动态行为</td><td>运行时更自由</td><td>闭世界限制，动态特性需要 metadata</td></tr>
+      <tr><td>启动与密度</td><td>通常启动更慢、RSS 更高</td><td>通常启动更快、RSS 更低</td></tr>
+      <tr><td>长期热点</td><td>JIT 可按真实负载持续优化</td><td>没有 HotSpot JIT 的持续重编译</td></tr>
+      <tr><td>构建成本</td><td>秒级到较短</td><td>本次 Native Image 生成约 5 分钟</td></tr>
+    </tbody>
+  </table>
+
+  <h2>选择口诀</h2>
+
+  <pre><code>冷启动、弹性扩容、内存密度优先 → 先评估 Native
+长期常驻、峰值吞吐、动态能力优先 → 先评估 JVM
+最终决定                         → 用真实业务负载测量</code></pre>
+
+  <p class="meta">实测环境：GraalVM CE JDK 25.0.2 · Spring Boot 4.1.0 ·
+  Ryzen 7 4800H · WSL2 · 7.5 GiB RAM。原始 TSV 位于
+  <a href="../native-demo/benchmark/results/2026-07-24/">benchmark results</a>。</p>
+
+  <footer>
+    <p>
+      <a href="0005-jdk-proxy-hints.html">上一课：JDK 动态代理</a>
+      ·
+      <a href="../learning-records/0007-jvm-native-performance.md">本课学习记录</a>
+      ·
+      <a href="../RESOURCES.md">全部课程资源</a>
+    </p>
+    <p>六课主线完成：你现在能构建、诊断、测试并用数据决定是否采用 Native Image。</p>
+  </footer>
+</main>
+</body>
+</html>
