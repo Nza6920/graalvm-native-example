@@ -11,7 +11,7 @@
 - [x] 第 2 课：使用 `nativeCompile` 构建本地原生可执行文件，并运行 `nativeTest`。
 - [x] 第 3 课：制造反射可达性故障，并用精确的 `RuntimeHintsRegistrar` 修复。
 - [x] 第 4 课：制造并修复 classpath 资源可达性问题。
-- [ ] 第 5 课：制造并修复 JDK 动态代理可达性问题。
+- [x] 第 5 课：制造并修复 JDK 动态代理可达性问题。
 - [ ] 第 6 课：测试冷启动、预热、吞吐量、内存和镜像部署边界。
 
 课程完整记录：
@@ -24,10 +24,12 @@
 - [RuntimeHints 速查表](reference/runtime-hints-cheatsheet.html)
 - [第四课离线 HTML：用 ResourceHints 打包动态资源](lessons/0004-resource-hints.html)
 - [第四课学习记录](learning-records/0005-resource-hints.md)
+- [第五课离线 HTML：用 ProxyHints 注册 JDK 动态代理](lessons/0005-jdk-proxy-hints.html)
+- [第五课学习记录](learning-records/0006-jdk-proxy-hints.md)
 
 ## 下一课入口
 
-第 5 课将添加一个 JVM 正常、Native 初始失败的 JDK 动态代理场景，然后用 proxy hints 修复。
+第 6 课将使用相同的接口和请求条件，对比 JVM 与 Native 的冷启动、预热、吞吐量、内存和部署边界。
 
 开始前的快速基线：
 

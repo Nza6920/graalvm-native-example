@@ -26,6 +26,8 @@
   导入 `RuntimeHintsRegistrar` 的当前 API 与条件注册语义。
 - [Spring Framework：`ResourceHints` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/aot/hint/ResourceHints.html)
   注册 Native Image 运行时需要的 classpath 资源模式。
+- [Spring Framework：`ProxyHints` Javadoc](https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/aot/hint/ProxyHints.html)
+  注册 Native Image 构建期需要准备的有序 JDK 代理接口组合。
 
 ## Wisdom (Communities)
 

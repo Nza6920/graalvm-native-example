@@ -38,6 +38,13 @@
 
   <p>资源路径从 classpath 根开始，不加 <code>classpath:</code> 前缀。只有确实需要整个目录时才使用类似 <code>greetings/**</code> 的宽泛模式。</p>
 
+  <h2>精确 JDK 代理注册</h2>
+  <pre><code>hints.proxies().registerJdkProxy(
+    MyFirstInterface.class,
+    MySecondInterface.class);</code></pre>
+
+  <p>接口顺序属于代理组合的一部分：<code>[A, B]</code> 和 <code>[B, A]</code> 是两个不同注册。如果是 Spring AOP 代理，还要考虑 Spring 自己附加的代理接口。</p>
+
   <h2>判断流程</h2>
   <pre><code>普通 JVM 测试
    ↓ 通过

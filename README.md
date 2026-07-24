@@ -52,15 +52,20 @@ com.example.nativedemo
 └── greeting
     ├── GreetingController
     ├── reflective
-        ├── GreetingPlugin
-        ├── FriendlyGreetingPlugin
-        ├── ReflectiveGreetingService
-        ├── ReflectiveGreetingController
-        └── GreetingRuntimeHints
-    └── resource
-        ├── ResourceGreetingService
-        ├── ResourceGreetingController
-        └── ResourceGreetingRuntimeHints
+    │   ├── GreetingPlugin
+    │   ├── FriendlyGreetingPlugin
+    │   ├── ReflectiveGreetingService
+    │   ├── ReflectiveGreetingController
+    │   └── GreetingRuntimeHints
+    ├── resource
+    │   ├── ResourceGreetingService
+    │   ├── ResourceGreetingController
+    │   └── ResourceGreetingRuntimeHints
+    └── proxy
+        ├── ProxyGreeting
+        ├── ProxyGreetingService
+        ├── ProxyGreetingController
+        └── ProxyGreetingRuntimeHints
 ```
 
 Keeping each dynamic implementation and its reachability metadata in the same feature package makes native-specific behavior easier to locate and maintain.
@@ -99,6 +104,7 @@ cd native-demo
 curl http://127.0.0.1:8080/hello
 curl http://127.0.0.1:8080/reflective-hello
 curl http://127.0.0.1:8080/resource-hello
+curl http://127.0.0.1:8080/proxy-hello
 ```
 
 Expected responses:
@@ -107,6 +113,7 @@ Expected responses:
 Hello from GraalVM!
 Hello from a reflective plugin!
 Hello from a classpath resource!
+HELLO, NATIVE!
 ```
 
 ## Build commands
@@ -147,6 +154,7 @@ See the complete implementation in [`GreetingRuntimeHints.java`](native-demo/src
 2. [Local `nativeCompile` and `nativeTest`](lessons/0002-local-native-compile-and-native-test.html)
 3. [Fix reflection reachability with `RuntimeHints`](lessons/0003-runtime-hints-reflection.html)
 4. [Package dynamic classpath resources with `ResourceHints`](lessons/0004-resource-hints.html)
+5. [Register JDK dynamic proxies with `ProxyHints`](lessons/0005-jdk-proxy-hints.html)
 
 References:
 
@@ -236,15 +244,20 @@ com.example.nativedemo
 └── greeting
     ├── GreetingController
     ├── reflective
-        ├── GreetingPlugin
-        ├── FriendlyGreetingPlugin
-        ├── ReflectiveGreetingService
-        ├── ReflectiveGreetingController
-        └── GreetingRuntimeHints
-    └── resource
-        ├── ResourceGreetingService
-        ├── ResourceGreetingController
-        └── ResourceGreetingRuntimeHints
+    │   ├── GreetingPlugin
+    │   ├── FriendlyGreetingPlugin
+    │   ├── ReflectiveGreetingService
+    │   ├── ReflectiveGreetingController
+    │   └── GreetingRuntimeHints
+    ├── resource
+    │   ├── ResourceGreetingService
+    │   ├── ResourceGreetingController
+    │   └── ResourceGreetingRuntimeHints
+    └── proxy
+        ├── ProxyGreeting
+        ├── ProxyGreetingService
+        ├── ProxyGreetingController
+        └── ProxyGreetingRuntimeHints
 ```
 
 反射实现和对应的可达性元数据放在同一个包中，让 Native 专属行为更容易定位和维护。
@@ -283,6 +296,7 @@ cd native-demo
 curl http://127.0.0.1:8080/hello
 curl http://127.0.0.1:8080/reflective-hello
 curl http://127.0.0.1:8080/resource-hello
+curl http://127.0.0.1:8080/proxy-hello
 ```
 
 预期响应：
@@ -291,6 +305,7 @@ curl http://127.0.0.1:8080/resource-hello
 Hello from GraalVM!
 Hello from a reflective plugin!
 Hello from a classpath resource!
+HELLO, NATIVE!
 ```
 
 ## 构建命令
@@ -331,6 +346,7 @@ hints.reflection().registerType(FriendlyGreetingPlugin.class, type -> type
 2. [本地 `nativeCompile` 与 `nativeTest`](lessons/0002-local-native-compile-and-native-test.html)
 3. [使用 `RuntimeHints` 修复反射可达性](lessons/0003-runtime-hints-reflection.html)
 4. [使用 `ResourceHints` 打包动态 classpath 资源](lessons/0004-resource-hints.html)
+5. [使用 `ProxyHints` 注册 JDK 动态代理](lessons/0005-jdk-proxy-hints.html)
 
 参考资料：
 

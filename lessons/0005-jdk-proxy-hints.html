@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第五课：用 ProxyHints 注册 JDK 动态代理</title>
+  <link rel="stylesheet" href="../assets/course.css">
+  <script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+<main>
+  <p class="kicker">Lesson 0005 · 已验证 · JVM 绿灯 / Native 红灯 / Hints 绿灯</p>
+  <h1>用 ProxyHints 注册 JDK 动态代理</h1>
+  <p class="lead">本课的胜利条件：区分“接口类型可达”和“代理接口组合已注册”，并用最小 JDK proxy hint 修复。</p>
+
+  <div class="callout">
+    <strong>本课已实测完成：</strong>接口类型保持可达，先稳定复现代理组合缺失，再注册一个精确 JDK proxy hint，最终 5/5 原生测试通过。
+  </div>
+
+  <h2>实验场景</h2>
+  <p>应用定义一个代理接口：</p>
+
+  <pre><code>public interface ProxyGreeting {
+    String format(String name);
+}</code></pre>
+
+  <p>接口名来自配置，而代理接口数组在运行时才组装：</p>
+
+  <pre><code>demo.greeting-proxy-interface=\
+com.example.nativedemo.greeting.proxy.ProxyGreeting</code></pre>
+
+  <pre><code>Class&lt;?&gt; proxyInterface = Class.forName(interfaceName);
+
+Object proxy = Proxy.newProxyInstance(
+    proxyInterface.getClassLoader(),
+    new Class&lt;?&gt;[] { proxyInterface },
+    invocationHandler);</code></pre>
+
+  <h2>刻意隔离故障边界</h2>
+  <p>红灯版本已经使用 reflection hint 注册 <code>ProxyGreeting</code> 类型，因此 <code>Class.forName()</code> 不会抢先失败：</p>
+
+  <pre><code>hints.reflection().registerType(ProxyGreeting.class);</code></pre>
+
+  <p>AOT metadata 中可以看到接口类型，但没有 JDK proxy 组合：</p>
+
+  <pre><code>{"type":"com.example.nativedemo.greeting.proxy.ProxyGreeting"}</code></pre>
+
+  <h2>JVM 绿灯</h2>
+
+  <pre><code>./gradlew test \
+  --tests com.example.nativedemo.greeting.proxy.ProxyGreetingTests
+
+BUILD SUCCESSFUL</code></pre>
+
+  <p>JVM 可以在运行时生成代理类，接口数组直到调用 <code>Proxy.newProxyInstance()</code> 时才确定也没有问题。</p>
+
+  <h2>Native 红灯</h2>
+
+  <pre><code>./gradlew nativeTest
+
+4 tests successful
+1 test failed
+
+MissingReflectionRegistrationError:
+Cannot reflectively access the proxy class inheriting
+['com.example.nativedemo.greeting.proxy.ProxyGreeting']</code></pre>
+
+  <table>
+    <tbody>
+      <tr><td>Native Image 编译</td><td>4 分 35 秒</td></tr>
+      <tr><td>完整 Gradle 任务</td><td>4 分 51 秒</td></tr>
+      <tr><td>峰值 RSS</td><td>5.53 GB</td></tr>
+      <tr><td>原生测试执行</td><td>195 ms</td></tr>
+      <tr><td>原生测试结果</td><td>4/5</td></tr>
+    </tbody>
+  </table>
+
+  <h2>为什么接口可达仍然不够？</h2>
+
+  <pre><code>接口类型可达
+    ≠
+实现该接口组合的代理类已生成</code></pre>
+
+  <p>普通 JVM 可以运行时生成新的 <code>$Proxy</code> 字节码。Native Image 运行时不能再补进一个构建时不存在的代理类，因此必须提前知道完整接口列表；多个接口时，接口顺序也属于代理组合的一部分。</p>
+
+  <div class="exercise"
+       data-quiz
+       data-correct-feedback="正确：接口类型已经可达，缺少的是实现该接口组合的代理类构建期注册。"
+       data-incorrect-feedback="再看异常位置：Class.forName 已成功，失败发生在 Proxy.newProxyInstance。">
+    <strong>检索练习：</strong>最准确的根因是哪一个？
+    <div>
+      <button type="button" data-correct="false">接口类型没有预先注册</button>
+      <button type="button" data-correct="true">代理组合没有预先注册</button>
+      <button type="button" data-correct="false">处理方法没有返回结果</button>
+    </div>
+    <p class="feedback" aria-live="polite"></p>
+  </div>
+
+  <h2>最小修复：注册接口组合</h2>
+  <p>在同一个 registrar 中保留两条不同职责的 metadata：</p>
+
+  <pre><code>public void registerHints(
+        RuntimeHints hints, ClassLoader classLoader) {
+    // 允许 Class.forName(interfaceName)
+    hints.reflection().registerType(ProxyGreeting.class);
+
+    // 允许 Proxy.newProxyInstance(...) 使用这个接口组合
+    hints.proxies().registerJdkProxy(ProxyGreeting.class);
+}</code></pre>
+
+  <p>Spring AOT 随后生成代理条目：</p>
+
+  <pre><code>{
+  "type": {
+    "proxy": [
+      "com.example.nativedemo.greeting.proxy.ProxyGreeting"
+    ]
+  }
+}</code></pre>
+
+  <div class="callout warning">
+    <strong>接口顺序是注册键的一部分。</strong>注册 <code>[A, B]</code> 不等于注册 <code>[B, A]</code>。Hint 的接口顺序必须和运行时传给 <code>Proxy.newProxyInstance()</code> 的数组一致。
+  </div>
+
+  <h2>绿灯证据</h2>
+
+  <pre><code>./gradlew nativeTest
+
+5 tests successful
+0 tests failed
+BUILD SUCCESSFUL</code></pre>
+
+  <table>
+    <thead>
+      <tr><th>指标</th><th>缺少 proxy hint</th><th>加入 proxy hint</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Native Image 编译</td><td>4 分 35 秒</td><td>4 分 03 秒</td></tr>
+      <tr><td>完整 Gradle 任务</td><td>4 分 51 秒</td><td>4 分 16 秒</td></tr>
+      <tr><td>峰值 RSS</td><td>5.53 GB</td><td>5.18 GB</td></tr>
+      <tr><td>可达类型</td><td>22,430</td><td>22,431</td></tr>
+      <tr><td>可达方法</td><td>97,580</td><td>97,585</td></tr>
+      <tr><td>镜像资源</td><td>434</td><td>434</td></tr>
+      <tr><td>原生测试结果</td><td>4/5</td><td>5/5</td></tr>
+    </tbody>
+  </table>
+
+  <p>代理修复增加了代理实现相关类型和方法，但没有增加资源文件。这再次说明 reflection、resources 和 proxies 是三类独立 metadata。</p>
+
+  <h2>三类动态行为的诊断映射</h2>
+
+  <table>
+    <thead>
+      <tr><th>运行时行为</th><th>典型错误</th><th>使用的 hint</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>按名称加载和调用类型</td><td><code>ClassNotFoundException</code></td><td><code>reflection()</code></td></tr>
+      <tr><td>按动态路径读取文件</td><td>输入流为 <code>null</code></td><td><code>resources()</code></td></tr>
+      <tr><td>按接口数组生成代理</td><td><code>MissingReflectionRegistrationError</code></td><td><code>proxies()</code></td></tr>
+    </tbody>
+  </table>
+
+  <h2>下一课</h2>
+  <p>第六课进入最终评估：用同一套请求对比 JVM 与 Native 的冷启动、预热、吞吐量、内存和部署边界，并学习如何避免错误基准。</p>
+
+  <p class="meta">主资料：<a href="https://docs.spring.io/spring-framework/docs/current/javadoc-api/org/springframework/aot/hint/ProxyHints.html"><code>ProxyHints</code> Javadoc</a> · <a href="../reference/runtime-hints-cheatsheet.html">RuntimeHints 速查表</a></p>
+
+  <footer>
+    <p>
+      <a href="0004-resource-hints.html">上一课：资源可达性</a>
+      ·
+      <a href="../learning-records/0006-jdk-proxy-hints.md">本课学习记录</a>
+      ·
+      <a href="../RESOURCES.md">全部课程资源</a>
+    </p>
+    <p>有任何不清楚的地方，直接问老师；类型、资源和代理是三种不同的 Native metadata。</p>
+  </footer>
+</main>
+</body>
+</html>
